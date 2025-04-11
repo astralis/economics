@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple Letter Editor</title>
+    <style>
+        body {
+            margin: 0;
+            font-family: sans-serif;
+            display: flex;
+            height: 100vh;
+            overflow: hidden; /* Prevent body scroll */
+        }
+
+        .editor-pane, .preview-pane {
+            flex: 1;
+            height: 100%;
+            overflow-y: auto; /* Allow scrolling within panes */
+            padding: 15px;
+            box-sizing: border-box;
+        }
+
+        .editor-pane {
+            border-right: 2px solid #ccc;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .preview-pane iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+            background-color: #fdfbf5; /* Match template background */
+        }
+
+        .controls {
+            margin-bottom: 15px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .controls label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+
+        .controls input[type="text"] {
+            width: calc(100% - 12px); /* Adjust for padding */
+            padding: 5px;
+            margin-bottom: 10px;
+            border: 1px solid #ccc;
+            border-radius: 3px;
+        }
+
+        .controls button {
+            padding: 5px 10px;
+            margin-right: 5px;
+            cursor: pointer;
+            border: 1px solid #ccc;
+            border-radius: 3px;
+        }
+        .controls button.highlighter {
+             min-width: 30px;
+             height: 30px;
+             vertical-align: middle;
+        }
+
+        #editable-body {
+            flex-grow: 1; /* Take remaining space */
+            border: 1px solid #ccc;
+            padding: 10px;
+            overflow-y: auto; /* Scroll if content exceeds height */
+            min-height: 300px; /* Ensure it has some initial height */
+            white-space: pre-wrap; /* Preserve whitespace and wrap */
+            font-family: 'Courier Prime', monospace; /* Match body font */
+            font-size: 16px; /* Match body font size */
+            line-height: 1.6; /* Match body line-height */
+            color: #4a4a4a; /* Match body text color */
+            background-color: #fff; /* Editor background */
+        }
+         /* Focus outline for accessibility */
+        #editable-body:focus {
+            outline: 2px solid dodgerblue;
+            border-color: dodgerblue;
+        }
+
+    </style>
+</head>
+<body>
+    <div class="editor-pane">
+        <h2>Editor Controls</h2>
+        <div class="controls">
+            <label for="date-input">Date:</label>
+            <input type="text" id="date-input">
+
+            <label>Highlight Text:</label>
+            <!-- Define highlight colors similar to rgba(200, 255, 83, 0.4) -->
+            <button class="highlighter" title="Highlight Green 1 (Base)" data-color="rgba(200, 255, 83, 0.4)" style="background-color: rgba(200, 255, 83, 0.4);"></button>
+            <button class="highlighter" title="Highlight Green 2 (Lighter/Yellower)" data-color="rgba(220, 255, 100, 0.45)" style="background-color: rgba(220, 255, 100, 0.45);"></button>
+            <button class="highlighter" title="Highlight Green 3 (Slightly Desaturated)" data-color="rgba(180, 240, 100, 0.4)" style="background-color: rgba(180, 240, 100, 0.4);"></button>
+            <button class="highlighter" title="Highlight Green 4 (Slightly Darker)" data-color="rgba(160, 215, 60, 0.4)" style="background-color: rgba(160, 215, 60, 0.4);"></button>
+            <button title="Remove Highlight" onclick="applyHighlight(null)">None</button><br>
+            <button id="save-button" style="background-color: #4CAF50; color: white; padding: 8px 15px; margin-top: 10px;">Save Letter</button>
+            <div id="save-status" style="margin-top: 5px; font-size: 0.9em;"></div>
+        </div>
+
+        <label for="editable-body" style="font-weight: bold; margin-bottom: 5px;">Letter Body:</label>
+        <div id="editable-body" contenteditable="true">
+            <!-- Initial body content will be loaded here by JS -->
+        </div>
+    </div>
+
+    <div class="preview-pane">
+        <iframe id="preview-frame"></iframe>
+    </div>
+
+    <!-- The Template (Hidden, used by JS) -->
+    <template id="letter-template">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Orb Letter</title> <!-- Title will be updated dynamically if needed -->
+            <link rel="preconnect" href="https://fonts.googleapis.com">
+            <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+            <link href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:opsz,wght@6..96,700&family=Courier+Prime&family=Dancing+Script:wght@600&family=Nunito+Sans:ital,opsz,wght@0,6..12,200..1000;1,6..12,200..1000&display=swap" rel="stylesheet">
+        <style>
+                :root {
+                    --cream-background: #fdfbf5;
+                    --text-color: #4a4a4a;
+                    /* Note: The JS highlighter uses inline styles, not this variable directly */
+                    --highlight-color: rgba(200, 255, 83, 0.4);
+                    --signature-color: #c8ff53;
+                    --logo-font: 'Nunito Sans', serif;
+                    --body-font: 'Courier Prime', monospace;
+                    --signature-font: 'Dancing Script', cursive;
+                }
+
+                body {
+                    margin: 0;
+                    padding: 0;
+                    background-color: var(--cream-background);
+                    font-family: var(--body-font);
+                    color: var(--text-color);
+                    font-size: 16px;
+                    line-height: 1.6;
+                }
+
+                .letterhead-container {
+                    max-width: 800px; /* Adjust as needed */
+                    margin: 2rem auto; /* Center the container */
+                    padding: 2rem 5rem; /* Generous padding for wide margins */
+                    background-color: var(--cream-background); /* Ensure container has bg color */
+                    box-sizing: border-box;
+                }
+
+                /* --- Header --- */
+                .letter-header {
+                    margin-bottom: 3rem;
+                }
+
+                .header-top {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: flex-start; /* Align items to the top */
+                    margin-bottom: 1rem;
+                    position: relative; /* For absolute positioning if needed, though flex seems fine */
+                }
+
+                .editor-info {
+                    font-size: 0.75rem;
+                    line-height: 1.3;
+                    text-transform: uppercase;
+                    flex: 1; /* Allow it to take up space */
+                    text-align: left;
+                }
+
+                .logo-container {
+                    flex: 2; /* Give it more space */
+                    text-align: center;
+                    margin: 0 1rem; /* Add some space around the center block */
+                }
+
+                .logo {
+                    font-family: var(--logo-font);
+                    font-size: 2.4rem; /* Large logo size */
+                    font-weight: 700;
+                    letter-spacing: 0.1em; /* Add spacing between letters */
+                    margin: 0 0 0.25rem 0; /* Adjust margins */
+                    line-height: 1;
+                    color: #333; /* Slightly darker for logo */
+                }
+
+                .publisher-info {
+                    font-size: 0.7rem;
+                    line-height: 1.3;
+                    text-transform: uppercase;
+                    margin-top: 0.5rem;
+                }
+
+                .phone-number {
+                    font-size: 0.9rem;
+                    flex: 1; /* Allow it to take up space */
+                    text-align: right;
+                    white-space: nowrap; /* Prevent wrapping */
+                }
+
+                .date { /* Target this for updates */
+                    text-align: center;
+                    margin-top: 1.5rem;
+                    font-size: 0.9rem;
+                }
+
+                /* --- Body --- */
+                .letter-body { /* Target this for updates */
+                    margin-bottom: 2rem;
+                }
+
+                .letter-body p {
+                    margin-bottom: 1.5rem;
+                    text-indent: 2em; /* Indent paragraphs */
+                }
+
+                 /* We need to style highlights applied via JS (inline styles) */
+                 /* This ensures paragraphs containing highlights still indent */
+                 .letter-body p span[style*="background-color"] {
+                    /* No special style needed here unless inline style breaks layout */
+                 }
+
+
+                .salutation {
+                    text-indent: 0; /* No indent for salutation */
+                    margin-bottom: 1.5rem;
+                }
+
+                /* Original highlight class - not used by JS highlighter, but keep for reference */
+                .highlight {
+                    background-color: var(--highlight-color);
+                    padding: 0.1em 0.2em;
+                    border-radius: 2px;
+                }
+
+                .closing {
+                    text-indent: 2em; /* Indent closing */
+                    margin-bottom: 1rem;
+                }
+
+                /* --- Signature --- */
+                .signature-area {
+                    margin-top: 1rem;
+                }
+
+                .signature-handwritten {
+                    font-family: var(--signature-font);
+                    font-size: 3rem;
+                    color: var(--signature-color);
+                    line-height: 1;
+                    margin-bottom: 0.5rem;
+                    margin-left: 2em;
+                    display: block;
+                }
+
+                .signature-typed {
+                    font-size: 1rem;
+                    margin-top: 0.5rem;
+                    text-align: right;
+                    padding-right: 2rem;
+                    position: relative;
+                    top: -1rem;
+                }
+
+
+                /* --- Footer (Recipient Address) --- */
+                .letter-footer {
+                    margin-top: 4rem; /* Space above address */
+                }
+
+                .recipient-address {
+                    font-style: normal; /* Override default italic for <address> */
+                    font-size: 0.9rem;
+                    line-height: 1.4;
+                    text-align: left;
+                }
+
+                /* --- Mobile Friendliness --- */
+                 @media (max-width: 768px) {
+                    .letterhead-container { padding: 1.5rem 2rem; }
+                    .logo { font-size: 2.8rem; }
+                    .publisher-info { font-size: 0.65rem; }
+                    .editor-info, .phone-number { font-size: 0.7rem; }
+                    .signature-handwritten { font-size: 2.5rem; margin-left: 1em; }
+                    .signature-typed { padding-right: 1rem; }
+                    .letter-body p, .closing { text-indent: 1.5em; }
+                 }
+                 @media (max-width: 480px) {
+                    body { font-size: 14px; }
+                    .letterhead-container { padding: 1rem 1rem; margin: 1rem auto; }
+                    .header-top { flex-wrap: wrap; justify-content: center; }
+                    .editor-info { flex-basis: 100%; text-align: center; margin-bottom: 0.5rem; order: 2; }
+                    .logo-container { flex-basis: 100%; margin: 0 0 0.5rem 0; order: 1; }
+                    .phone-number { flex-basis: 100%; text-align: center; order: 3; }
+                    .logo { font-size: 2.2rem; }
+                    .date { margin-top: 1rem; }
+                    .letter-body p, .closing, .salutation { text-indent: 0; }
+                    .signature-handwritten { font-size: 2rem; margin-left: 0; text-align: center; }
+                    .signature-typed { text-align: center; padding-right: 0; top: 0; }
+                    .letter-footer { margin-top: 2rem; }
+                    .recipient-address { font-size: 0.8rem; text-align: center; }
+                 }
+        </style>
+        </head>
+        <body>
+
+            <div class="letterhead-container">
+                <header class="letter-header">
+                    <div class="header-top">
+                        <div class="editor-info">
+                            OFFICE OF THE<br>
+                            EDITOR
+                        </div>
+                        <div class="logo-container">
+                            <h1 class="logo">SPERO NEWS</h1>
+                            <div class="publisher-info">
+                              URBI et ORBI<br>
+                            </div>
+                        </div>
+                       <div class="phone-number">
+                            @SperoNews
+                        </div>
+                    </div>
+                    <div class="date">
+                        April 2 2025 <!-- Initial Date -->
+                    </div>
+                </header>
+
+                <main class="letter-body">
+                    <!-- Initial Body Content -->
+                    <p class="salutation">To the Free --</p>
+
+                    <p>The French President has the constitutional power to issue pardons. This authority is granted under Article 17 of the Constitution of the Fifth Republic, which states that the President of the Republic has the right to grant pardons ("droit de grâce"). This allows the President to reduce or annul a sentence, though it does not erase the conviction itself. Historically, this power has been used sparingly and often for symbolic or humanitarian reasons, such as granting clemency in cases of terminal illness or on national holidays like Bastille Day. Unlike some systems, <span class="highlight">the French President's pardon power is exercised independently</span>, without requiring approval from other branches of government.</p>
+
+                   <!-- <p class="closing">Much love,</p>
+
+                    <div class="signature-area">
+                        <div class="signature-handwritten">Diane</div>
+                        <div class="signature-typed">Diana Vreeland.</div>
+                    </div>-->
+                 </main>
+
+                <footer class="letter-footer">
+                    <address class="recipient-address">
+                        Editor<br>
+                        Spero News<br>
+                        U.S.A.
+                </footer>
+            </div>
+
+        </body>
+    </template>
+
+    <script>
+        const dateInput = document.getElementById('date-input');
+        const editableBody = document.getElementById('editable-body');
+        const previewFrame = document.getElementById('preview-frame');
+        const template = document.getElementById('letter-template');
+
+        let previewDoc = null; // To store the iframe's document object
+
+        // Function to update the preview iframe
+        function updatePreview() {
+            if (!previewDoc) return; // Don't run if iframe isn't ready
+
+            // Update Date
+            const previewDateEl = previewDoc.querySelector('.date');
+            if (previewDateEl) {
+                previewDateEl.textContent = dateInput.value.trim();
+            }
+
+            // Update Body
+            const previewBodyEl = previewDoc.querySelector('.letter-body');
+            if (previewBodyEl) {
+                // IMPORTANT: Directly copy the HTML from the editor div
+                // This preserves formatting like highlights applied via execCommand
+                previewBodyEl.innerHTML = editableBody.innerHTML;
+            }
+        }
+
+        // Function to apply highlighting
+        function applyHighlight(color) {
+             // Ensure the editor has focus before executing command
+            editableBody.focus();
+            if (color) {
+                 // Apply background color
+                document.execCommand('backColor', false, color);
+            } else {
+                 // Attempt to remove background color (may not work perfectly across all browsers/cases)
+                 // A more robust solution requires selection range manipulation.
+                document.execCommand('backColor', false, 'transparent'); // or try removing style attribute manually
+                // Let's also try removing the highlight class if it exists, although execCommand doesn't add it
+                 document.execCommand('removeFormat', false, 'backColor');
+            }
+            // Update preview immediately after applying command
+            updatePreview();
+        }
+
+
+        // Initialize the editor when the preview frame is loaded
+        previewFrame.addEventListener('load', () => {
+            previewDoc = previewFrame.contentDocument || previewFrame.contentWindow.document;
+
+            // Write the template HTML into the iframe
+            const templateHtml = template.innerHTML;
+            previewDoc.open();
+            previewDoc.write(templateHtml);
+            previewDoc.close();
+
+             // Wait a moment for the iframe content to be fully parsed and rendered
+            setTimeout(() => {
+                // Get initial content FROM the template IN the iframe
+                const initialDateEl = previewDoc.querySelector('.date');
+                const initialBodyEl = previewDoc.querySelector('.letter-body');
+
+                if (initialDateEl) {
+                    dateInput.value = initialDateEl.textContent.trim();
+                }
+                if (initialBodyEl) {
+                    // Copy the initial HTML structure, including the highlight span
+                    editableBody.innerHTML = initialBodyEl.innerHTML;
+                }
+
+                // Add event listeners AFTER initial content is loaded
+                dateInput.addEventListener('input', updatePreview);
+                editableBody.addEventListener('input', updatePreview);
+
+                // Add listeners to highlight buttons
+                const highlightButtons = document.querySelectorAll('.highlighter');
+                highlightButtons.forEach(button => {
+                    button.addEventListener('click', () => {
+                        applyHighlight(button.dataset.color);
+                    });
+                });
+
+            }, 100); // Small delay might be needed
+
+        });
+
+        // Set the iframe's src to trigger the load event (using srcdoc is efficient)
+        // Using 'about:blank' first can help in some security contexts before setting srcdoc
+        previewFrame.src = 'about:blank';
+        // Use srcdoc to load the initial HTML directly without needing a separate file
+        previewFrame.srcdoc = template.innerHTML;
+
+        // --- Additions for Saving ---
+        const saveButton = document.getElementById('save-button');
+        const saveStatus = document.getElementById('save-status');
+        // !! PASTE THE WEB APP URL YOU COPIED FROM APPS SCRIPT DEPLOYMENT HERE !!
+        const G_APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbws7LQZb6iZxyK-GWJDOiTS9RHATE45-xGDdaC2q5NdidtbPRoa2ZZBaYX2DlT7p8w/exec';
+
+        saveButton.addEventListener('click', async () => {
+            if (!previewDoc) {
+                saveStatus.textContent = 'Error: Preview not loaded yet.';
+                saveStatus.style.color = 'red';
+                return;
+            }
+            // CORRECTED CHECK:
+            if (!G_APPS_SCRIPT_URL || G_APPS_SCRIPT_URL === 'YOUR_DEPLOYED_WEB_APP_URL_HERE') {
+                 saveStatus.textContent = 'Error: Apps Script URL not configured in editor.html.';
+                 saveStatus.style.color = 'red';
+                return;
+            }
+
+            saveButton.disabled = true;
+            saveStatus.textContent = 'Saving...';
+            saveStatus.style.color = 'orange';
+
+            try {
+                // Get the current date value
+                const letterDateValue = dateInput.value.trim();
+
+                // Get the FULL HTML content of the rendered letter from the iframe
+                const letterHtmlContent = previewDoc.documentElement.outerHTML;
+
+                // Prepare the data payload
+                const payload = {
+                    letterDate: letterDateValue,
+                    letterHtml: letterHtmlContent
+                };
+
+                // Send the data to the Google Apps Script Web App
+                const response = await fetch(G_APPS_SCRIPT_URL, {
+                    method: 'POST',
+                    mode: 'cors', // Required for cross-origin requests
+                    // 'no-cors' can be used but prevents reading the response body
+                    // Apps Script needs specific headers for standard POST, but fetch handles stringified JSON well
+                    // For simple text or different content types, redirect handling is needed.
+                    // Using JSON is generally easiest.
+                     headers: {
+                         // Content-Type required for Apps Script to parse e.postData.contents correctly as JSON
+                         'Content-Type': 'application/json',
+                     },
+                     // Apps Script doPost expects the data in e.postData.contents.
+                     // Stringifying the JSON payload achieves this.
+                    body: JSON.stringify(payload),
+                    // Redirect handling might be needed if script isn't set up perfectly,
+                    // but ContentService usually avoids this for direct responses.
+                     redirect: 'follow' // Follow redirects if any occur
+                });
+
+                // Check if the fetch itself was successful (network level)
+                if (!response.ok) {
+                     // Try to get more details from the response if possible
+                    let errorText = `HTTP error! Status: ${response.status}`;
+                    try {
+                        const errorData = await response.json(); // Try parsing error response from Apps Script
+                        errorText += ` - ${errorData.message || 'No specific error message.'}`;
+                    } catch (parseError) {
+                         // Could not parse response body
+                         errorText += ` - Could not parse error response body.`;
+                    }
+                     throw new Error(errorText);
+                 }
+
+
+                // Parse the JSON response from the Apps Script
+                const result = await response.json();
+
+                if (result.status === 'success') {
+                    saveStatus.textContent = 'Saved successfully!';
+                    saveStatus.style.color = 'green';
+                } else {
+                    throw new Error(result.message || 'Unknown error from script.');
+                }
+
+            } catch (error) {
+                console.error('Save Error:', error);
+                saveStatus.textContent = `Error: ${error.message}`;
+                saveStatus.style.color = 'red';
+            } finally {
+                saveButton.disabled = false; // Re-enable button
+                 // Optional: Clear status message after a few seconds
+                 setTimeout(() => { saveStatus.textContent = ''; }, 5000);
+            }
+        });
+        // --- End of Additions ---
+
+    </script>
+
+</body>
+</html>
