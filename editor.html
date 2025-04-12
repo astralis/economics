@@ -87,12 +87,6 @@
         }
 
     </style>
-    <!-- Firebase SDK (Apps core) -->
-<script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js"></script>
-<!-- Firestore Database -->
-<script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore-compat.js"></script>
-<!-- NOTE: Using compat versions for easier transition from older examples if needed.
-     You can use the modular SDK (v9+) for smaller bundle sizes if preferred. -->
 </head>
 <body>
     <div class="editor-pane">
@@ -456,11 +450,12 @@
         previewFrame.src = 'about:blank';
         // Use srcdoc to load the initial HTML directly without needing a separate file
         previewFrame.srcdoc = template.innerHTML;
-
+</script>
+<script type="module">
         // --- Additions for Saving ---
-        // Import the functions you need from the SDKs you need
-import { initializeApp } from "firebase/app";
-import { getAnalytics } from "firebase/analytics";
+   // Import specific functions you need
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js';
+    import { getFirestore, collection, addDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js';
 // TODO: Add SDKs for Firebase products that you want to use
 // https://firebase.google.com/docs/web/setup#available-libraries
 
@@ -480,52 +475,55 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const analytics = getAnalytics(app);
 
-// --- Existing Save Button Code ---
-saveButton.addEventListener('click', async () => {
-    if (!previewDoc) {
-        saveStatus.textContent = 'Error: Preview not loaded yet.';
-        saveStatus.style.color = 'red';
-        return;
-    }
-    // REMOVE THE G_APPS_SCRIPT_URL CHECK
+ // --- Your other editor code ---
+    const dateInput = document.getElementById('date-input'); // Ensure elements are defined before use
+    const editableBody = document.getElementById('editable-body');
+    const previewFrame = document.getElementById('preview-frame');
+    const saveButton = document.getElementById('save-button');
+    const saveStatus = document.getElementById('save-status');
+    let previewDoc = previewFrame.contentDocument || previewFrame.contentWindow.document; // Assuming iframe is loaded
 
-    saveButton.disabled = true;
-    saveStatus.textContent = 'Saving...';
-    saveStatus.style.color = 'orange';
+    // ... rest of your editor setup code ...
 
-    try {
-        // Get the current date value
-        const letterDateValue = dateInput.value.trim();
 
-        // Get the FULL HTML content of the rendered letter from the iframe
-        const letterHtmlContent = previewDoc.documentElement.outerHTML;
+    saveButton.addEventListener('click', async () => {
+        if (!previewDoc) {
+            saveStatus.textContent = 'Error: Preview not loaded yet.';
+            saveStatus.style.color = 'red';
+            return;
+        }
 
-        // --- Prepare data for Firestore ---
-        const letterData = {
-            letterDate: letterDateValue,
-            letterHtml: letterHtmlContent,
-            savedAt: firebase.firestore.FieldValue.serverTimestamp() // Add a server timestamp
-        };
+        saveButton.disabled = true;
+        saveStatus.textContent = 'Saving...';
+        saveStatus.style.color = 'orange';
 
-        // --- Save data to Firestore ---
-        // 'letters' will be the name of your collection
-        const docRef = await db.collection("letters").add(letterData);
+        try {
+            const letterDateValue = dateInput.value.trim();
+            const letterHtmlContent = previewDoc.documentElement.outerHTML;
 
-        console.log("Document written with ID: ", docRef.id);
-        saveStatus.textContent = 'Saved successfully!';
-        saveStatus.style.color = 'green';
+            const letterData = {
+                letterDate: letterDateValue,
+                letterHtml: letterHtmlContent,
+                savedAt: serverTimestamp() // Use the imported function
+            };
 
-    } catch (error) {
-        console.error("Error adding document: ", error);
-        saveStatus.textContent = `Error saving to Firebase: ${error.message}`;
-        saveStatus.style.color = 'red';
-    } finally {
-        saveButton.disabled = false; // Re-enable button
-        // Optional: Clear status message after a few seconds
-        setTimeout(() => { saveStatus.textContent = ''; }, 5000);
-    }
-});
-// --- End of Save Button Code ---
+            // Use imported functions for Firestore operations
+            const lettersCollectionRef = collection(db, "letters");
+            const docRef = await addDoc(lettersCollectionRef, letterData);
+
+            console.log("Document written with ID: ", docRef.id);
+            saveStatus.textContent = 'Saved successfully!';
+            saveStatus.style.color = 'green';
+
+        } catch (error) {
+            console.error("Error adding document: ", error);
+            saveStatus.textContent = `Error saving to Firebase: ${error.message}`;
+            saveStatus.style.color = 'red';
+        } finally {
+            saveButton.disabled = false;
+            setTimeout(() => { saveStatus.textContent = ''; }, 5000);
+        }
+    });
         // --- End of Additions ---
 
     </script>
