@@ -358,78 +358,105 @@
 
         </body>
     </template>
+    <!-- Add ONE combined script block with type="module" and defer -->
+    <script type="module" defer>
+        // --- Firebase Imports ---
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js';
+        // Import Firestore functions
+        import { getFirestore, collection, addDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js';
+        // Import Analytics IF NEEDED, otherwise remove
+        // import { getAnalytics } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-analytics.js";
 
-    <script>
+        // --- Firebase Configuration ---
+        const firebaseConfig = {
+          apiKey: "AIzaSyA6wh4BtGd8hVqU0TwHswqSqDBcPJOrhyM", // Use your actual key
+          authDomain: "article-db-751c4.firebaseapp.com",
+          projectId: "article-db-751c4",
+          storageBucket: "article-db-751c4.appspot.com", // Corrected .appspot.com
+          messagingSenderId: "604286101485",
+          appId: "1:604286101485:web:0b1adaf5ad5f77b3d529e4",
+          measurementId: "G-NW5FML679W" // Optional
+        };
+
+        // --- Initialize Firebase ---
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app); // Initialize Firestore instance
+        // Initialize Analytics IF NEEDED, otherwise remove this line
+        // const analytics = getAnalytics(app);
+        console.log("Firebase Initialized.");
+
+        // --- Get DOM Element References (ONCE) ---
         const dateInput = document.getElementById('date-input');
         const editableBody = document.getElementById('editable-body');
         const previewFrame = document.getElementById('preview-frame');
         const template = document.getElementById('letter-template');
+        const saveButton = document.getElementById('save-button');
+        const saveStatus = document.getElementById('save-status');
 
-        let previewDoc = null; // To store the iframe's document object
+        // --- Variable for iframe document (scoped to this module) ---
+        let previewDoc = null;
 
-        // Function to update the preview iframe
+        // --- Editor Functions ---
         function updatePreview() {
-            if (!previewDoc) return; // Don't run if iframe isn't ready
-
-            // Update Date
+            if (!previewDoc) {
+                 console.warn("updatePreview called before previewDoc is ready.");
+                 return;
+            }
             const previewDateEl = previewDoc.querySelector('.date');
             if (previewDateEl) {
                 previewDateEl.textContent = dateInput.value.trim();
             }
-
-            // Update Body
             const previewBodyEl = previewDoc.querySelector('.letter-body');
             if (previewBodyEl) {
-                // IMPORTANT: Directly copy the HTML from the editor div
-                // This preserves formatting like highlights applied via execCommand
                 previewBodyEl.innerHTML = editableBody.innerHTML;
             }
         }
 
-        // Function to apply highlighting
         function applyHighlight(color) {
-             // Ensure the editor has focus before executing command
-            editableBody.focus();
+            editableBody.focus(); // Ensure focus
             if (color) {
-                 // Apply background color
                 document.execCommand('backColor', false, color);
             } else {
-                 // Attempt to remove background color (may not work perfectly across all browsers/cases)
-                 // A more robust solution requires selection range manipulation.
-                document.execCommand('backColor', false, 'transparent'); // or try removing style attribute manually
-                // Let's also try removing the highlight class if it exists, although execCommand doesn't add it
-                 document.execCommand('removeFormat', false, 'backColor');
+                document.execCommand('removeFormat', false, 'backColor');
             }
-            // Update preview immediately after applying command
-            updatePreview();
+            updatePreview(); // Update preview after command
         }
 
-
-        // Initialize the editor when the preview frame is loaded
+        // --- Initialize Editor (iframe load) ---
         previewFrame.addEventListener('load', () => {
+            console.log("iframe loaded.");
+            // Assign the iframe's document to the module-scoped variable
             previewDoc = previewFrame.contentDocument || previewFrame.contentWindow.document;
 
-            // Write the template HTML into the iframe
+            if (!previewDoc) {
+                console.error("Could not get preview document from iframe.");
+                return;
+            }
+
             const templateHtml = template.innerHTML;
             previewDoc.open();
             previewDoc.write(templateHtml);
             previewDoc.close();
 
              // Wait a moment for the iframe content to be fully parsed and rendered
+             // This timeout might still be needed if querySelector runs too early after write/close
             setTimeout(() => {
-                // Get initial content FROM the template IN the iframe
+                console.log("Initializing editor content.");
                 const initialDateEl = previewDoc.querySelector('.date');
                 const initialBodyEl = previewDoc.querySelector('.letter-body');
 
                 if (initialDateEl) {
                     dateInput.value = initialDateEl.textContent.trim();
+                } else {
+                     console.warn("Could not find .date element in iframe template.");
                 }
                 if (initialBodyEl) {
-                    // Copy the initial HTML structure, including the highlight span
                     editableBody.innerHTML = initialBodyEl.innerHTML;
+                } else {
+                    console.warn("Could not find .letter-body element in iframe template.");
                 }
 
-                // Add event listeners AFTER initial content is loaded
+                // Add event listeners AFTER initial content is potentially loaded
                 dateInput.addEventListener('input', updatePreview);
                 editableBody.addEventListener('input', updatePreview);
 
@@ -440,93 +467,85 @@
                         applyHighlight(button.dataset.color);
                     });
                 });
+                 // Add listener for the 'None' button if it uses applyHighlight
+                const removeHighlightButton = document.querySelector('button[title="Remove Highlight"]');
+                if(removeHighlightButton) {
+                    removeHighlightButton.addEventListener('click', () => applyHighlight(null));
+                }
 
-            }, 100); // Small delay might be needed
+                console.log("Editor event listeners attached.");
+
+            }, 150); // Slightly increased delay just in case
 
         });
 
-        // Set the iframe's src to trigger the load event (using srcdoc is efficient)
-        // Using 'about:blank' first can help in some security contexts before setting srcdoc
-        previewFrame.src = 'about:blank';
-        // Use srcdoc to load the initial HTML directly without needing a separate file
+        // --- Setup iframe source (triggers the 'load' event) ---
+        // Using srcdoc is generally good practice
         previewFrame.srcdoc = template.innerHTML;
-</script>
-<script type="module">
-        // --- Additions for Saving ---
-   // Import specific functions you need
-    import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js';
-    import { getFirestore, collection, addDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js';
-// TODO: Add SDKs for Firebase products that you want to use
-// https://firebase.google.com/docs/web/setup#available-libraries
-
-// Your web app's Firebase configuration
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
-const firebaseConfig = {
-  apiKey: "AIzaSyA6wh4BtGd8hVqU0TwHswqSqDBcPJOrhyM",
-  authDomain: "article-db-751c4.firebaseapp.com",
-  projectId: "article-db-751c4",
-  storageBucket: "article-db-751c4.firebasestorage.app",
-  messagingSenderId: "604286101485",
-  appId: "1:604286101485:web:0b1adaf5ad5f77b3d529e4",
-  measurementId: "G-NW5FML679W"
-};
-
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
-const analytics = getAnalytics(app);
-
- // --- Your other editor code ---
-    const dateInput = document.getElementById('date-input'); // Ensure elements are defined before use
-    const editableBody = document.getElementById('editable-body');
-    const previewFrame = document.getElementById('preview-frame');
-    const saveButton = document.getElementById('save-button');
-    const saveStatus = document.getElementById('save-status');
-    let previewDoc = previewFrame.contentDocument || previewFrame.contentWindow.document; // Assuming iframe is loaded
-
-    // ... rest of your editor setup code ...
+        // If srcdoc causes issues in some edge cases, fallback to:
+        // previewFrame.src = 'about:blank';
+        // setTimeout(() => { previewFrame.srcdoc = template.innerHTML; }, 0);
 
 
-    saveButton.addEventListener('click', async () => {
-        if (!previewDoc) {
-            saveStatus.textContent = 'Error: Preview not loaded yet.';
-            saveStatus.style.color = 'red';
-            return;
-        }
+        // --- Save Button Logic (Listener attached OUTSIDE iframe load) ---
+        saveButton.addEventListener('click', async () => {
+            console.log("Save button clicked."); // Add log here
 
-        saveButton.disabled = true;
-        saveStatus.textContent = 'Saving...';
-        saveStatus.style.color = 'orange';
+            // Check if previewDoc is ready (it should be if iframe loaded)
+            if (!previewDoc) {
+                saveStatus.textContent = 'Error: Preview not loaded yet or failed to load.';
+                saveStatus.style.color = 'red';
+                console.error("Save clicked, but previewDoc is not ready.");
+                return;
+            }
 
-        try {
-            const letterDateValue = dateInput.value.trim();
-            const letterHtmlContent = previewDoc.documentElement.outerHTML;
+            // Check if Firestore instance is ready
+            if (!db) {
+                 saveStatus.textContent = 'Error: Firestore not initialized.';
+                 saveStatus.style.color = 'red';
+                 console.error("Save clicked, but db is not initialized.");
+                 return;
+            }
 
-            const letterData = {
-                letterDate: letterDateValue,
-                letterHtml: letterHtmlContent,
-                savedAt: serverTimestamp() // Use the imported function
-            };
 
-            // Use imported functions for Firestore operations
-            const lettersCollectionRef = collection(db, "letters");
-            const docRef = await addDoc(lettersCollectionRef, letterData);
+            saveButton.disabled = true;
+            saveStatus.textContent = 'Saving...';
+            saveStatus.style.color = 'orange';
+            console.log("Attempting to save...");
 
-            console.log("Document written with ID: ", docRef.id);
-            saveStatus.textContent = 'Saved successfully!';
-            saveStatus.style.color = 'green';
+            try {
+                const letterDateValue = dateInput.value.trim();
+                // Access the iframe content correctly via previewDoc
+                const letterHtmlContent = previewDoc.documentElement.outerHTML;
 
-        } catch (error) {
-            console.error("Error adding document: ", error);
-            saveStatus.textContent = `Error saving to Firebase: ${error.message}`;
-            saveStatus.style.color = 'red';
-        } finally {
-            saveButton.disabled = false;
-            setTimeout(() => { saveStatus.textContent = ''; }, 5000);
-        }
-    });
-        // --- End of Additions ---
+                const letterData = {
+                    letterDate: letterDateValue,
+                    letterHtml: letterHtmlContent,
+                    savedAt: serverTimestamp() // Use the imported function
+                };
+
+                // Use imported functions for Firestore operations
+                const lettersCollectionRef = collection(db, "letters");
+                const docRef = await addDoc(lettersCollectionRef, letterData);
+
+                console.log("Document written with ID: ", docRef.id);
+                saveStatus.textContent = 'Saved successfully!';
+                saveStatus.style.color = 'green';
+
+            } catch (error) {
+                console.error("Error adding document to Firestore: ", error);
+                saveStatus.textContent = `Error saving to Firebase: ${error.message}`;
+                saveStatus.style.color = 'red';
+            } finally {
+                saveButton.disabled = false;
+                setTimeout(() => { saveStatus.textContent = ''; }, 5000);
+            }
+        });
+
+        console.log("Main script execution finished. Waiting for iframe load and user interaction.");
 
     </script>
+
 
 </body>
 </html>
